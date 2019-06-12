@@ -1,0 +1,202 @@
+"""This module is a Python wrapper for IOS-XE Packet Trace features"""
+import argparse
+#from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, ArgumentTypeError
+
+import tac
+
+
+def get_parser():
+    """Provides command-line interface and defines required arguments using the argparse module.
+
+    Automatically generates help and usage messages and issues errors when users give the program invalid arguments.
+    Info about program arguments is done by making calls to the add_argument() method.
+    ArgumentParser parses arguments through the parse_args() method. This will inspect the command line, convert
+    each argument to the appropriate type and then invoke the appropriate action.
+
+    Returns:
+        Namespace object will be built up from attributes parsed out of the command line
+    """
+    parser = argparse.ArgumentParser(description='Packet Tracer',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-int", "--interface",
+                        type=str,
+                        help="you can set interface for conditional debug")
+    parser.add_argument("-v", "--version",
+                        type=str,
+                        help="debug ipv4 or ipv6 conditions",
+                        choices=['ipv4', 'ipv6']),
+    parser.add_argument("-acl", "--acl",
+                        type=str,
+                        help="you can set access-list for conditional debug, specify name of ACL")
+    parser.add_argument("-ip", "--ip_address",
+                        type=str,
+                        help="ip address for conditional debug (acceptable formats: A.B.C.D/nn for IPv4 "
+                             "or X:X:X:X::X/<0-128> for IPv6)")
+    parser.add_argument("-dir", "--direction",
+                        default='both',
+                        type=str,
+                        help="direction",
+                        choices=['ingress', 'egress', 'both'])
+    parser.add_argument("-l", "--layer",
+                        type=str,
+                        choices=['l2', 'l3', 'l4'],
+                        help="the location that the copy of the packet starts, L2 is the default location")
+    parser.add_argument("-drop", "--drop",
+                        type=restricted_range,
+                        help="drop code, set as 'all' if you do not want to provide any specific code")
+    parser.add_argument("-sum", "--summary_only",
+                        action='store_true',
+                        help="specifies that only the summary data is captured, default is to capture both summary data"
+                             " and feature-path data")
+    parser.add_argument("-cir", "--circular",
+                        action='store_true',
+                        help='capture last set of packets')
+    parser.add_argument("-p", "--packet_count",
+                        default=8192,
+                        type=lambda x: find_closest_value_for_arg(16, 8192, x),
+                        # choices=create_powers_of_two(16, 8192),
+                        help="packet count <16-8192> specifies the maximum number of packets that are maintained at "
+                             "one time")
+    parser.add_argument("-fia", "--fia_trace",
+                        action='store_true',
+                        help='optionally performs an FIA trace in addition to the path data info')
+    parser.add_argument("-ds", "--data_size",
+                        # type=int,
+                        # choices=create_powers_of_two(2048, 16384),
+                        type=lambda x: find_closest_value_for_arg(2048, 16384, x),
+                        help="size of trace data in bytes <2048-16384>, default is 2048 bytes")
+    parser.add_argument("-s", "--size",
+                        # choices=create_powers_of_two(16, 2048),
+                        # type=int,
+                        type=lambda x: find_closest_value_for_arg(16, 2048, x),
+                        help="the maximum number of octets that are copied, default is 64 octets, from range <16-2048>")
+    parser.add_argument("-cdir", "--copy_direction",
+                        default='both',
+                        type=str,
+                        choices=['both', 'input', 'output'],
+                        help="direction of the packet flow to be copied")
+    parser.add_argument("-cp", "--copy",
+                        action='store_true',
+                        help='copy packet data')
+    parser.add_argument("-punt", "--punt",
+                        type=restricted_range,
+                        help="punt code, set as 'all' if you do not want to provide any specific code")
+    parser.add_argument("-inj", "--inject",
+                        type=restricted_range,
+                        help="inject code, set as 'all' if you do not want to provide any specific code")
+    parser.add_argument("-mpls", "--mpls",
+                        action='store_true',
+                        help="mpls features -under development")
+    parser.add_argument("-time", "--max_exec_time",
+                        default=600,
+                        type=int,
+                        help="after MAX_EXEC_TIME (sec) application will be stopped, default: 600 s")
+    parser.add_argument('-d', '--relative-test-dir', help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    conditions_input_validation(parser, args)
+    return args
+
+
+def conditions_input_validation(parser, args):
+    """Checks given arguments for platform conditions configuration.
+
+    It is not allowed neither to specify an IP address and ACL list in one CLI command nor to give IP or ACL without
+    specifying version of IP. If so, error is raised.
+
+    Args:
+        parser: ArgumentParser object
+        args: given argument after converting to the appropriate type and invoking the appropriate action
+
+    Raises:
+        ArgumentParser.error and terminates the program with a status code of 2
+     """
+    if args.ip_address is not None and args.acl is not None:
+        parser.error("Select one. You cannot specify an IP address and ACL list in one CLI command")
+    elif (args.ip_address or args.acl) and args.version is None:
+        parser.error('--version of IP protocol is required')
+    elif args.mpls:
+        parser.error('under development')
+    else:
+        return None
+
+
+def restricted_range(arg):
+    """Checks if given value is in the range <0-65534>, unless it is a particular string
+
+    Args:
+        arg: given argument
+
+    Returns:
+        value from correct range
+
+    Raises:
+        ArgumentTypeError: if value is not in range
+     """
+    if arg == 'all':
+        return arg
+    else:
+        value = int(arg)
+        if value < 0 or value > 65534:
+            raise argparse.ArgumentTypeError("{} not in range <0-65534>".format(value))
+        return value
+
+
+def create_powers_of_two(start, end):
+    """Creates list with powers of two to validate given arguments
+
+    Args:
+        start: first element in range
+        end: last element in range
+
+    Returns:
+        List containing powers of two
+    """
+    right_powers_of_two = []
+    current_power_of_two = start
+    while current_power_of_two <= end:
+        right_powers_of_two.append(current_power_of_two)
+        current_power_of_two *= 2
+    return right_powers_of_two
+
+
+def find_closest_value_for_arg(start, end, arg):
+    """Finds number closest to a given value from list of possible values
+
+    Args:
+        start: first element in range
+        end: last element in range
+        arg: given argument
+
+    Returns:
+        closest_value selected from the list
+    """
+    list_powers_of_two = create_powers_of_two(start, end)
+    closest_value = min(list_powers_of_two, key=lambda x: abs(x - int(arg)))
+    return closest_value
+
+
+def main():
+    """Creates a new instance of the class and assigns this object to the pt variable"""
+
+    args = get_parser()
+    pt = tac.packet_trace.PacketTrace(
+        interface=args.interface, version=args.version, acl=args.acl, ip_address=args.ip_address,
+        direction=args.direction, layer=args.layer, drop=args.drop, summary_only=args.summary_only,
+        circular=args.circular, packet_count=args.packet_count, fia_trace=args.fia_trace,
+        data_size=args.data_size, size=args.size, copy_direction=args.copy_direction, copy=args.copy,
+        punt=args.punt, inject=args.inject, mpls=args.mpls, max_exec_time=args.max_exec_time
+    )
+    pt.run_packet_trace()
+
+
+if __name__ == '__main__':
+    main()
+
+"""
+Run PacketTrace from another script. Example:
+
+from packet_trace import PacketTrace
+pt = PacketTrace(interface='Gig1', fia_trace=True, acl='ACL', ip_address='192.168.2.1')
+pt.run_packet_trace()
+
+"""
