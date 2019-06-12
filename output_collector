@@ -1,0 +1,166 @@
+#!/usr/bin/env python
+"""Simplifies output collection"""
+
+
+import argparse
+import json
+import os
+from time import sleep
+from pprint import pprint
+from collections import defaultdict
+
+import tac
+import tac.helper as helper
+
+TECHS = ['cats', 'lansw', 'rp', 'vpn', 'aaa']
+
+
+def parse_commands_json(metadata, json_fp=None):
+    """
+
+    Args:
+        metadata:
+        json_fp:
+
+    Returns:
+
+    """
+    product_tags = helper.get_product_tags(metadata['product_family'])
+    # print(product_tags)
+    commands_lookup = defaultdict(list)
+    tech_dict = defaultdict(list)
+
+    if json_fp is None:
+        commands_json = helper.load_json_from_package(helper.COMMANDS_JSON)
+    else:
+        commands_json = json.load(json_fp)
+    for command_dict in commands_json:
+        platforms = command_dict.get('platform', ['all'])
+        command = command_dict['command']
+        comment = command_dict.get('comment', '')
+        if 'invalid' not in comment:
+            if any(platform in product_tags for platform in platforms):
+                if command_dict.get('dsig', True):
+                    commands_lookup['dsig'].append(command)
+                technologies = command_dict.get('technology', ['all'])
+                for tech in technologies:
+                    if tech == 'all':
+                        for known_tech in TECHS:
+                            tech_dict[known_tech].append(command)
+                    elif tech in TECHS:
+                        tech_dict[tech].append(command)
+                    else:
+                        print('Unknown technology "{}", skipping command "{}". Select one from: {}'.format(
+                            tech,
+                            command,
+                            TECHS
+                        ))
+
+    commands_lookup['techology'] = tech_dict
+    return commands_lookup
+
+
+def parse_arguments():
+    """
+
+    Returns:
+
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--commands', help='string with commands separated by "; ". Double quotes are required')
+    parser.add_argument('-T', '--include-show-tech', help='Include show tech',
+                        action='store_true')
+    parser.add_argument('-N', '--case-number', type=int,
+                        help='If case number is provided, the script will attempt to send outputs to TAC FTP')
+    parser.add_argument('-f', '--commands-file', help='A file with commands list, one command on one line',
+                        type=argparse.FileType('r'))
+    parser.add_argument('--technology', help='select technology (optional)',
+                        choices=TECHS)
+    parser.add_argument('-D', '--dsig', help='run commands for signatures',
+                        action='store_true')
+    parser.add_argument('--exclude-meta', help='do not include metadata together with outputs',
+                        action='store_false', dest='include_meta')
+    parser.add_argument('--pre', help=('string with commands separated by "; ". Double quotes are required.'
+                                       'Commands are executed before the main list'))
+    parser.add_argument('--post', help=('string with commands separated by "; ". Double quotes are required.'
+                                        'Commands are executed after the main list'))
+    parser.add_argument('-F', '--frequency', type=int,
+                        help='How often (in seconds) to execute the main list of commands')
+    parser.add_argument('-n', '--repeat', type=int, help='How many times to execute the main list of commands')
+    # parser.add_argument('-t', '--transfer-method', help='FTP/TFTP/SFTP', choices=['ftp', 'tftp', 'sftp'])
+    parser.add_argument('-H', '--hostname', help='Hostname of FTP server')
+    # parser.add_argument('-P', '--port', type=int, help='Port for FTP server')
+    parser.add_argument('-u', '--username', help='username for FTP server')
+    parser.add_argument('-p', '--password', help='password for FTP server')
+    # Hidden parameters
+    # -j specifies an alternative commands.json file
+    # --relative-test-dir specifies the path to the directory with files containing outputs from show commands
+    parser.add_argument('-j', '--commands-json', help=argparse.SUPPRESS, type=argparse.FileType('r'))
+    parser.add_argument('-d', '--relative-test-dir', help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    return args
+
+
+def collect_outputs():
+    args = parse_arguments()
+    metadata = helper.get_device_metadata(relative_test_dir=args.relative_test_dir)
+
+    if args.commands_json:
+        with args.commands_json as f:
+            commands_dict = parse_commands_json(metadata, f)
+    else:
+        commands_dict = parse_commands_json(metadata)
+
+    commands = []
+    if args.commands:
+        commands = [command.strip() for command in args.commands.split(';')]
+    elif args.commands_file:
+        with args.commands_file as f:
+            commands = f.read().splitlines()
+    else:
+        if args.technology:
+            commands = commands_dict['technology'][args.technology]
+        if args.dsig:
+            dsig_commands = commands_dict['dsig']
+            if commands:
+                # let's add unique dsig commands (that are not yet in the list) to the end
+                commands.extend(set(dsig_commands) - set(commands))
+            else:
+                commands = dsig_commands
+    if not commands:
+        raise ValueError("Empty list of commands")
+
+    # always add show clock and show version
+    if 'show version' not in commands:
+        commands.insert(0, 'show version')
+    if 'show clock' not in commands:
+        commands.insert(0, 'show clock')
+
+    if args.include_show_tech:
+        commands.insert(0, 'show tech')
+
+    archive_filename = helper.collect_outputs_and_create_archive(
+        commands, relative_test_dir=args.relative_test_dir,
+        case_number=args.case_number
+    )
+    if args.case_number:
+        tac.helper.upload_file_to_the_case(path=archive_filename, case_number=args.case_number)
+
+    # TODO: pre/post/frequency/repeat
+    # if args.pre:
+    #     pass
+    # if args.frequency:
+    #     pass
+    #     while True:
+    #         pass
+    #
+    # if args.post:
+    #     pass
+
+
+def main():
+    collect_outputs()
+
+
+if __name__ == '__main__':
+    main()
