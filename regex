@@ -1,0 +1,113 @@
+{
+  "show version": {
+    "regexp_list": [
+      "^Cisco IOS XE Software,\\s+Version\\s+(?P<sw_iosxe_version>[\\w.:\\(\\)]+)",
+      "^Cisco IOS Software.*?Version (?P<sw_version>[\\w.:\\(\\)]+)",
+      "^(?P<hostname>\\S+) uptime is (?P<uptime>[\\w ,]+)",
+      "^System image file is \"(?P<image_location>[\\w:.\\-]+):(?P<sw_image>[\\w.\\-]+)\"",
+      "^Last reload reason: (?P<reload_reason>.+?)$",
+      "^(?P<memory_size>[\\dK]+) bytes of physical memory",
+      "^[cC]isco\\s+(?P<product>\\S+).+?with .+? bytes of.+?memory",
+      "^\\*\\s+\\d\\s+\\d+\\s+\\S+\\s+[\\w.]+\\s+(?P<sw_image_base>[\\w\\-]+)\\s+(BUNDLE|INSTALL)"
+    ],
+    "multiple_matches": false,
+    "merge": true,
+    "meta_fields": ["sw_version", "hostname", "uptime", "sw_image", "sw_image_base", "product"]
+  },
+  "show interfaces": {
+    "split": "\\n^(?=\\w)",
+    "regexp_list": [
+      "^(?P<interface_name>[\\w.\\-\\/]+) is (?P<l1_link_status>.+?), line protocol is (?P<l2_link_status>\\b.+\\b)\\s",
+      ", address is (?P<mac_address>[\\da-f.]+)",
+      "address.+?(?P<ip_address>(\\d{,3}\\.){3}\\d{,3})",
+      "^\\s+Encapsulation (?P<encapsulation>[\\w.]+).*?, (Vlan ID\\s+(?P<vlan_number>\\d+))?",
+      "^\\s+Input queue: (?P<input_queue_size>\\d+)/(?P<input_queue_max>\\d+)/(?P<input_queue_drops>\\d+)/(?P<input_queue_flushes>\\d+).+?; Total output drops: (?P<total_output_drops>\\d+)",
+      "^\\s+Output queue: (?P<output_queue_current>\\d+)/(?P<output_queue_max>\\d+)",
+      "^\\s+(?P<input_rate_interval>\\d+ \\w+) input rate (?P<input_rate_bits>\\d+) bits/sec, (?P<input_rate_packets>\\d+) packets/sec",
+      "^\\s+(?P<output_rate_interval>\\d+ \\w+) output rate (?P<output_rate_bits>\\d+) bits/sec, (?P<output_rate_packets>\\d+) packets/sec",
+      "^\\s+(?P<input_packets>\\d+) packets input, (?P<input_bytes>\\d+) bytes(, (?P<input_no_buffer>\\d+) no buffer)?",
+      "^\\s+Received (?P<input_broadcast>\\d+) broadcasts \\((?P<input_ip_multicast>\\d+) IP multicasts\\)",
+      "^\\s+(?P<input_errors>\\d+) input errors, (?P<input_crc>\\d+) CRC, (?P<input_frame>\\d+) frame, (?P<input_overrun>\\d+) overrun, (?P<input_ignored>\\d+) ignored",
+      "^\\s+(?P<input_watchdog>\\d+) watchdog, (?P<input_multicast>\\d+) multicast, (?P<input_pause_input>\\d+) pause input",
+      "^\\s+(?P<output_packets>\\d+) packets output, (?P<output_bytes>\\d+) bytes(, (?P<output_underruns>\\d+) underruns)?",
+      "^\\s+(?P<output_errors>\\d+) output errors, (?P<output_collisions>\\d+) collisions, (?P<interface_resets>\\d+) interface resets",
+      "^\\s+(?P<input_unknown_protocol_drops>\\d+) unknown protocol drops"
+    ],
+    "multiple_matches": false,
+    "merge": true,
+    "meta_fields": ["interface_name", "l2_link_status", "mac_addr", "ip_address", "vlan_number"],
+    "section": "interfaces"
+  },
+  "show inventory": {
+    "regexp_list": [
+      "^NAME:\\s+\"(?P<part_name>.+?)\",\\s+DESCR:\\s+\"(?P<part_description>.+?)\"",
+      "^PID:\\s+(?P<part_pid>[\\w\\-]+)\\s*,\\s+VID:\\s+(?P<part_hw_version>\\w+)?\\s*,\\s+SN:\\s+(?P<part_serial_number>\\w+)?"
+    ],
+    "multiple_matches": true,
+    "merge": true,
+    "meta_fields": ["part_pid", "part_hw_version", "part_serial_number"],
+    "section": "modules"
+  },
+  "show platform packet-trace statistics": {
+    "regexp_list": [
+      "Traced\\s+(?P<num_traced_packets>\\d+)"
+    ],
+    "multiple_matches": false,
+    "merge": true
+  },
+  "show platform hardware qfp active statistics drop": {
+    "regexp_list": [
+      "^(\\s+(?P<drop_code>\\d+)\\s+)?(?P<drop_feature>\\w+)\\s+(?P<dropped_packets>\\d+)\\s+(?P<dropped_bytes>\\d+)"
+    ],
+    "multiple_matches": true,
+    "merge": true,
+    "section": "qfp_drops"
+  },
+  "show ip interface brief": {
+    "regexp_list": [
+      "^(?P<interface_name>\\S+)\\s+(?P<ip_address>\\S+)\\s+(?P<ok>\\w+)\\s+(?P<method>\\w+)\\s+(?P<l1_link_status>[\\w ]+\\b)\\s+(?P<l2_link_status>\\w+)\\s*$"
+    ],
+    "multiple_matches": true,
+    "merge": true,
+    "section": "interfaces"
+  },
+  "show platform conditions": {
+    "regexp_list": [
+      "^Conditional.+:\\s+(?P<conditional_state>\\w+)$"
+    ],
+    "multiple_matches": false,
+    "merge": true
+  },
+  "show platform packet-trace packet all": {
+    "split": "\\n^(?=[\\S ]*Packet:)",
+    "regexp_list": [
+      "^((?P<type>[\\w ]+):)?\\s*Packet:\\s+(?P<packet_num>\\d+)\\s+CBUG ID:\\s+(?P<cbug_id>\\d+)",
+      "Summary\\s+Input\\s+:\\s+(?P<summary_input_interface>[\\w.\\-\\/]+)\\s+Output\\s+:\\s+(?P<summary_output_interface>[\\w.\\-\\/]+)\\s+State\\s+:\\s+(?P<decision>\\w+)\\s*(?P<drop_code>\\d+)?\\s*(\\((?P<drop_feature>\\w+)\\))?",
+      "\\s+Feature:\\s+(?P<feature>\\S+)\\s+Input\\s+:\\s+(?P<input_interface>\\S+)\\s+Output\\s+:\\s+(?P<output_interface>\\S+)\\s+Source\\s+:\\s+(?P<src_ip>\\S+)\\s+Destination\\s+:\\s+(?P<dst_ip>\\S+)\\s+Protocol\\s+:\\s+(?P<protocol_num>\\d+)\\s*(\\((?P<protocol>\\w+)\\))?\\s*(SrcPort\\s+:\\s+(?P<src_port>\\d+)\\s+DstPort\\s+:\\s+(?P<dst_port>\\d+))?"
+    ],
+    "multiple_matches": false,
+    "merge": true,
+    "section": "packet_trace_packets",
+    "drop": {
+      "type": "IOSd Path Flow"
+    }
+  },
+  "show process memory": {
+    "regexp_list": [
+      "^123$"
+    ],
+    "multiple_matches": false,
+    "merge": false,
+    "alternative_commands": [
+      "show memory statistics"
+    ],
+    "children": {
+      "regexp_list": [
+        "^something$"
+      ],
+      "multiple_matches": true,
+      "merge": true,
+      "section": "memory_per_process"
+    }
+  }
+}
