@@ -1,0 +1,47 @@
+TAC scripts
+This is a repository of python scripts developed by TAC leveraging on-box Python which is available from IOS-XE 16.5.1+ on ASR1k, ISR4k and cat3k/cat9k and from IOS-XE 16.6.1 on CSR1000v.
+
+Guestshell and on-box Python overview
+Guestshell is a LXC container with CentOS running inside on x86 platforms (routers) and MontaVista container on MIPS platforms (switches).    bootflash: is mounted as /bootflash/ inside the container.
+Python2.7 is pre-installed as well as cli library which returns outputs of any Cisco IOS command.
+
+Installation
+Create VirtualPortGroup interface for a container, assign an ip address and enable NAT
+
+interface VirtualPortGroup0
+ ip address 192.168.1.1 255.255.255.0
+ ip nat inside
+interface GigabitEthernet1
+ ip nat outside
+ip access-list extended NAT-ACL
+ permit ip 192.168.1.0 0.0.0.255 any
+ip nat inside source list NAT-ACL interface GigabitEthernet1 overload
+
+Enable IOX and Guest shell by providing an IP address from the same subnet as VirtualPortGroup interface and specifying correct DNS server, which will be added to /etc/resolv.conf:
+
+Pre IOS-XE 16.7
+iox
+end
+guestshell enable VirtualPortGroup 0 guest-ip 192.168.1.2 name-server 144.254.71.184
+
+Post IOS-XE 16.7
+iox
+app-hosting appid guestshell
+vnic gateway1 virtualportgroup 0 guest-interface 0 guest-ipaddress 192.168.1.2 netmask 255.255.255.0 gateway 192.168.1.1 name-server 144.254.71.184
+end
+
+guestshell enable
+At this point Guest Shell should be working.
+
+Let's login to the guest shell to verify that it is working:
+
+Router# guestshell
+[guestshell@guestshell ~]$
+Great! It is working!
+
+Let's also install some useful yum packages:
+sudo yum -y install git nano
+sudo pip install --upgrade pip
+
+Let's now clone this repository from box
+$ wget <URL>
