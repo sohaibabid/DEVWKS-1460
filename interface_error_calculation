@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+from tac.helper import parse_cli_command
+from tac.interface import Interface
+
+
+# Note: not needed
+def calculate_interfaces_errors(parsed_all_interfaces, list_of_errors):
+    interface_list = []
+    for parsed_interface in parsed_all_interfaces:
+        interface_list.append(
+            calculate_interface_errors_for_interface(parsed_interface, list_of_errors)
+        )
+    return interface_list
+
+
+# Note: not needed
+def calculate_interface_errors_for_interface(parsed_interface, errors_of_interest):
+    # TODO: we need to catch an exception with wrong format or no interface passed
+    interface = Interface(parsed_interface, errors_of_interest)
+    # interface.calculate_errors_input()
+    # interface.calculate_errors_output()
+    interface.check_interface_health()
+    return interface
+
+
+def main():
+
+    errors_of_interest = {
+        'input': [
+            'input_errors',
+            'input_crc',
+            'input_overrun',
+            'input_ignored'
+        ],
+        'output': [
+            'total_output_drops',
+            'output_errors'
+        ]
+    }
+
+    parsed_all_interfaces = parse_cli_command("show interface")
+
+    for parsed_interface in parsed_all_interfaces:
+        interface = Interface(parsed_interface, errors_of_interest)
+        interface.check_interface_health()
+        print(interface.generate_health_report())
+
+    # calculate_interfaces_errors(parsed_all_interfaces, errors_of_interest)
+
+
+if __name__ == '__main__':
+    main()
