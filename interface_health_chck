@@ -1,0 +1,21 @@
+from tac.helper import parse_cli_command
+from tac.interface import Interface
+
+
+def check_interfaces_health(parsed_interfaces):
+
+    for parsed_interface in parsed_interfaces:
+        interface = Interface(parsed_interface)
+        interface.check_interface_health()
+        print(interface.show_interface())
+
+
+def main():
+
+    test_dir = "tests/files/ios-xe/16.6/20170601-csr"
+
+    parsed_interfaces = parse_cli_command("show int", relative_test_dir=test_dir)
+    check_interfaces_health(parsed_interfaces)
+
+if __name__ == '__main__':
+    main()
